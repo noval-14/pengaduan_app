@@ -1,0 +1,37 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // 🔥 ANDROID GRADLE PLUGIN (WAJIB BIAR SUPPORT SDK 35)
+        classpath 'com.android.tools.build:gradle:8.3.0'
+
+        // 🔥 FIREBASE
+        classpath 'com.google.gms:google-services:4.3.15'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// 🔥 SET FOLDER BUILD
+rootProject.buildDir = "../build"
+
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+
+// 🔥 DEPENDENCY APP
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
+// 🔥 CLEAN TASK
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}
