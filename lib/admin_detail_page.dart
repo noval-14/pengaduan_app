@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 
-// Palette Warna Premium 2026
+// Palette Warna
 class AppColors {
   static const primary = Color(0xFF2563EB);
   static const bg = Color(0xFFF8FAFC);
@@ -45,7 +45,7 @@ class _AdminDetailPageState extends State<AdminDetailPage>
   }
 
   // =====================================================
-  // LOGIC BACKEND (TIDAK DIUBAH)
+  // LOGIC BACKEND
   // =====================================================
 
   Future<void> addView() async {
@@ -95,52 +95,81 @@ class _AdminDetailPageState extends State<AdminDetailPage>
     });
   }
 
-  Future<String> getSentiment(String text) async {
-    final url = Uri.parse("http://192.168.1.34:5000/predict");
+  Future<Map<String, dynamic>> getSentiment(String text) async {
+    final url = Uri.parse("http://192.168.1.9:5000/predict");
+
     try {
       final response = await http.post(
         url,
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"text": text}),
       );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+
         String result = "";
+        double confidence = 0.0;
+
+        // Ambil Label
         if (data is Map && data.containsKey('sentiment')) {
           result = data['sentiment'].toString().toLowerCase();
         } else if (data is Map && data.containsKey('label')) {
           result = data['label'].toString().toLowerCase();
         }
-        if (result.contains("positif") || result.contains("positive"))
-          return "positif";
-        if (result.contains("negatif") || result.contains("negative"))
-          return "negatif";
-        return fallbackSentiment(text);
-      }
-      return fallbackSentiment(text);
-    } catch (e) {
-      return fallbackSentiment(text);
-    }
-  }
 
-  String fallbackSentiment(String text) {
-    text = text.toLowerCase();
-    if (text.contains("bagus") ||
-        text.contains("baik") ||
-        text.contains("mantap")) return "positif";
-    if (text.contains("jelek") ||
-        text.contains("buruk") ||
-        text.contains("lambat")) return "negatif";
-    return "netral";
+        // confidence score ke firestore
+        if (data is Map) {
+          if (data.containsKey('confidence')) {
+            confidence = double.tryParse(data['confidence'].toString()) ?? 0.0;
+          } else if (data.containsKey('score')) {
+            confidence = double.tryParse(data['score'].toString()) ?? 0.0;
+          }
+        }
+
+        String sentiment;
+        if (result.contains("positif") || result.contains("positive")) {
+          sentiment = "positif";
+        } else if (result.contains("negatif") || result.contains("negative")) {
+          sentiment = "negatif";
+        } else {
+          sentiment = "netral";
+        }
+
+        return {
+          'sentiment': sentiment,
+          'confidence': confidence, // Nilai  masuk ke sini
+        };
+      }
+      return {'sentiment': 'netral', 'confidence': 0.0};
+    } catch (e) {
+      debugPrint("Error Flask: $e");
+      return {'sentiment': 'netral', 'confidence': 0.0};
+    }
   }
 
   Future<void> addComment() async {
     String text = commentController.text.trim();
     final user = FirebaseAuth.instance.currentUser;
+
+    debugPrint("ADD COMMENT YANG BARU DI JALANKAN");
+
     if (text.isEmpty) return;
+
     setState(() => isLoading = true);
+
     try {
-      String sentiment = await getSentiment(text);
+      // 1. Memanggil getSentiment (sekarang sudah bisa baca 'score' dari Flask)
+      final aiResult = await getSentiment(text);
+
+      // 2. Mengambil sentiment dan confidence (0.99...)
+      final String sentiment = aiResult['sentiment']?.toString() ?? 'netral';
+      final double confidence =
+          (aiResult['confidence'] as num?)?.toDouble() ?? 0.0;
+
+      debugPrint("SENTIMENT: $sentiment");
+      debugPrint("CONFIDENCE: $confidence");
+
       await FirebaseFirestore.instance
           .collection('reports')
           .doc(widget.reportId)
@@ -148,32 +177,39 @@ class _AdminDetailPageState extends State<AdminDetailPage>
           .add({
         'comment': text,
         'sentiment': sentiment,
+        'confidence': confidence,
         'user_email': user?.email ?? '',
         'created_at': Timestamp.now(),
       });
+
+      // 4. Hitung ulang statistik p, n, nt
       final snapshot = await FirebaseFirestore.instance
           .collection('reports')
           .doc(widget.reportId)
           .collection('comments')
           .get();
+
       int p = 0, n = 0, nt = 0;
       for (var doc in snapshot.docs) {
-        String s = (doc['sentiment'] ?? 'netral').toLowerCase();
-        if (s == "positif")
+        String s = (doc['sentiment'] ?? 'netral').toString().toLowerCase();
+        if (s == "positif") {
           p++;
-        else if (s == "negatif")
+        } else if (s == "negatif") {
           n++;
-        else
+        } else {
           nt++;
+        }
       }
+
+      // 5. Update Status Sistem & Bersihkan UI
       await updateSystemStatus(getReportStatus(p, n, nt));
       commentController.clear();
     } catch (e) {
-      debugPrint("Error: $e");
+      debugPrint("Error saat menambah komentar: $e");
+    } finally {
+      setState(() => isLoading = false);
     }
-    setState(() => isLoading = false);
   }
-
   // =====================================================
   // UI HELPERS & DESIGN COMPONENTS
   // =====================================================
@@ -265,18 +301,52 @@ class _AdminDetailPageState extends State<AdminDetailPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // IDENTITAS PELAPOR
+          Container(
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: AppColors.primary,
+                  child: const Icon(Icons.person, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Pelapor Resmi:",
+                          style: TextStyle(
+                              fontSize: 10, color: AppColors.textSub)),
+                      Text(
+                          data['user_name'] ??
+                              data['user_email']?.split('@')[0] ??
+                              'Warga Ambon',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textHeadline)),
+                      Text(data['user_email'] ?? '',
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textSub)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           Hero(
             tag: widget.reportId,
             child: Container(
               height: 250,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10))
-                ],
                 image: DecorationImage(
                   image: NetworkImage(data['image_url'] ?? ''),
                   fit: BoxFit.cover,
@@ -606,9 +676,17 @@ class _AdminDetailPageState extends State<AdminDetailPage>
           .snapshots(),
       builder: (context, snapshot) {
         int pos = 0, neg = 0, net = 0;
+        double totalConfidence = 0.0;
+
         if (snapshot.hasData) {
           for (var doc in snapshot.data!.docs) {
-            String s = (doc['sentiment'] ?? 'netral').toLowerCase();
+            final commentData = doc.data() as Map<String, dynamic>;
+            String s = (commentData['sentiment'] ?? 'netral').toLowerCase();
+
+            // Ambil nilai confidence dari database
+            totalConfidence +=
+                (commentData['confidence'] as num? ?? 0.0).toDouble();
+
             if (s == 'positif')
               pos++;
             else if (s == 'negatif')
@@ -617,22 +695,23 @@ class _AdminDetailPageState extends State<AdminDetailPage>
               net++;
           }
         }
+
         int total = pos + neg + net;
+        // Hitung rata-rata
+        double avgConfidence = total > 0 ? (totalConfidence / total) : 0.0;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 4 Summary Cards (GRID - Perbaikan Overflow)
               GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: 2,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
-                childAspectRatio:
-                    1.4, // Dinaikkan agar ruang vertikal lebih lega
+                childAspectRatio: 1.4,
                 children: [
                   _summaryCard("Total Interactions", total.toString(),
                       Icons.analytics_rounded, AppColors.indigo),
@@ -645,24 +724,17 @@ class _AdminDetailPageState extends State<AdminDetailPage>
                 ],
               ),
               const SizedBox(height: 24),
-
-              // Sentiment Analytics
               _buildAnalyticsCard(pos, net, neg, total),
               const SizedBox(height: 24),
-
-              // AI Status Card (Gradient)
               _buildAIStatusLarge(data['system_status'] ?? 'Analysing'),
               const SizedBox(height: 24),
 
-              // AI Confidence (Circular Indicator)
-              _buildConfidenceUI(),
-              const SizedBox(height: 24),
+              // MEMANGGIL UI DENGAN PARAMETER
+              _buildConfidenceUI(avgConfidence),
 
-              // Insight Card
+              const SizedBox(height: 24),
               _buildInsightCard(pos, neg, net),
               const SizedBox(height: 24),
-
-              // Timeline
               _buildAITimeline(data),
               const SizedBox(height: 100),
             ],
@@ -789,7 +861,21 @@ class _AdminDetailPageState extends State<AdminDetailPage>
     );
   }
 
-  Widget _buildConfidenceUI() {
+  // TAMBAHKAN PARAMETER double avgConfidence DI SINI
+  Widget _buildConfidenceUI(double avgConfidence) {
+    double displayPercent = avgConfidence * 100;
+
+    Color statusColor = AppColors.net;
+    String label = "Medium Confidence";
+
+    if (avgConfidence >= 0.8) {
+      statusColor = AppColors.pos;
+      label = "High Confidence Score";
+    } else if (avgConfidence < 0.4) {
+      statusColor = AppColors.neg;
+      label = "Low Confidence Score";
+    }
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -800,20 +886,20 @@ class _AdminDetailPageState extends State<AdminDetailPage>
             height: 60,
             width: 60,
             child: CircularProgressIndicator(
-                value: 0.96,
+                value: avgConfidence, // Menampilkan data real
                 strokeWidth: 8,
                 backgroundColor: AppColors.bg,
-                color: AppColors.primary),
+                color: statusColor),
           ),
           const SizedBox(width: 20),
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("AI Confidence",
+              const Text("AI Confidence",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              Text("96% High Confidence Score",
+              Text("${displayPercent.toStringAsFixed(1)}% $label",
                   style: TextStyle(
-                      color: AppColors.pos,
+                      color: statusColor,
                       fontSize: 12,
                       fontWeight: FontWeight.bold)),
             ],

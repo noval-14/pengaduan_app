@@ -19,6 +19,10 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final user = FirebaseAuth.instance.currentUser;
 
+  // VARIABLE UNTUK FITUR SEARCH
+  String _searchQuery = "";
+  final TextEditingController _searchController = TextEditingController();
+
   // Logika pembantu untuk format waktu
   String _getTimeAgo(Timestamp? timestamp) {
     if (timestamp == null) return "";
@@ -32,6 +36,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
@@ -39,15 +49,14 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           children: [
             // ==========================================
-            // HEADER (PIXEL PERFECT CENTERED TITLE)
+            // HEADER
             // ==========================================
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const SizedBox(
-                      width: 32), // Kompensasi untuk menyeimbangkan icon kanan
+                  const SizedBox(width: 32),
                   const Text(
                     "Beranda",
                     style: TextStyle(
@@ -64,41 +73,15 @@ class _HomePageState extends State<HomePage> {
                             builder: (_) => const NotificationPage()),
                       );
                     },
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        const Icon(Icons.notifications_none_rounded,
-                            size: 28, color: Colors.black),
-                        Positioned(
-                          right: -2,
-                          top: -2,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFEF4444),
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: const BoxConstraints(
-                                minWidth: 16, minHeight: 16),
-                            child: const Text(
-                              "3",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: const Icon(Icons.notifications_none_rounded,
+                        size: 28, color: Colors.black),
                   ),
                 ],
               ),
             ),
 
             // ==========================================
-            // SEARCH BAR (CUSTOM CONTAINER)
+            // SEARCH BAR (SEKARANG SUDAH BERFUNGSI)
             // ==========================================
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -116,13 +99,32 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
+                        controller: _searchController,
+                        onChanged: (value) {
+                          // Update state saat user mengetik
+                          setState(() {
+                            _searchQuery = value.toLowerCase();
+                          });
+                        },
                         decoration: InputDecoration(
-                          hintText: "Cari laporan...",
+                          hintText: "Cari judul laporan...",
                           hintStyle: const TextStyle(
                               color: Color(0xFF94A3B8), fontSize: 14),
                           border: InputBorder.none,
                           isDense: true,
                           contentPadding: EdgeInsets.zero,
+                          // Tombol hapus pencarian jika ada teks
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = "";
+                                    });
+                                  },
+                                )
+                              : null,
                         ),
                       ),
                     ),
@@ -132,7 +134,7 @@ class _HomePageState extends State<HomePage> {
             ),
 
             // ==========================================
-            // FEED LIST (STREAMBUILDER LOGIC)
+            // FEED LIST (DENGAN LOGIKA FILTER SEARCH)
             // ==========================================
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
@@ -148,32 +150,43 @@ class _HomePageState extends State<HomePage> {
                     return const Center(child: Text("Belum ada laporan"));
                   }
 
-                  final reports = snapshot.data!.docs;
+                  // LOGIKA FILTERING: Saring data berdasarkan input di Search Bar
+                  final allDocs = snapshot.data!.docs;
+                  final filteredReports = allDocs.where((doc) {
+                    final title = (doc['title'] ?? "").toString().toLowerCase();
+                    return title.contains(_searchQuery);
+                  }).toList();
+
+                  if (filteredReports.isEmpty) {
+                    return const Center(
+                      child: Text("Laporan tidak ditemukan",
+                          style: TextStyle(color: Colors.grey)),
+                    );
+                  }
 
                   return ListView.builder(
-                    itemCount: reports.length,
+                    itemCount: filteredReports.length,
                     padding: const EdgeInsets.only(top: 10),
                     itemBuilder: (context, index) {
                       final data =
-                          reports[index].data() as Map<String, dynamic>;
-                      final reportId = reports[index].id;
+                          filteredReports[index].data() as Map<String, dynamic>;
+                      final reportId = filteredReports[index].id;
                       final uid = FirebaseAuth.instance.currentUser?.uid;
                       final List likes = data['likes'] ?? [];
                       final bool isLiked = uid != null && likes.contains(uid);
 
-                      // Logic Warna Status Sesuai Mockup
+                      // Logic Warna Status
                       String statusRaw = (data['status'] ?? "MENUNGGU")
                           .toString()
                           .toUpperCase();
-                      Color statusBg =
-                          const Color(0xFFFFF7ED); // Menunggu Orange
+                      Color statusBg = const Color(0xFFFFF7ED);
                       Color statusTxt = const Color(0xFFF59E0B);
 
                       if (statusRaw.contains("DIPROSES")) {
-                        statusBg = const Color(0xFFEFF6FF); // Diproses Blue
+                        statusBg = const Color(0xFFEFF6FF);
                         statusTxt = const Color(0xFF2563EB);
                       } else if (statusRaw.contains("SELESAI")) {
-                        statusBg = const Color(0xFFF0FDF4); // Selesai Green
+                        statusBg = const Color(0xFFF0FDF4);
                         statusTxt = const Color(0xFF16A34A);
                       }
 
@@ -182,18 +195,14 @@ class _HomePageState extends State<HomePage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => DetailPage(reportId: reportId),
-                            ),
+                                builder: (_) => DetailPage(reportId: reportId)),
                           );
                         },
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Separator Garis Halus (Pengganti Divider)
                             Container(
                                 height: 1, color: const Color(0xFFF1F5F9)),
-
-                            // Header User Post (Pengganti ListTile)
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 20, vertical: 12),
@@ -203,10 +212,10 @@ class _HomePageState extends State<HomePage> {
                                     radius: 20,
                                     backgroundColor: const Color(0xFFE2E8F0),
                                     backgroundImage:
-                                        (data['photo_url'] ?? "").isNotEmpty
-                                            ? NetworkImage(data['photo_url'])
+                                        (data['user_photo'] ?? "").isNotEmpty
+                                            ? NetworkImage(data['user_photo'])
                                             : null,
-                                    child: (data['photo_url'] ?? "").isEmpty
+                                    child: (data['user_photo'] ?? "").isEmpty
                                         ? const Icon(Icons.person,
                                             color: Colors.white)
                                         : null,
@@ -236,13 +245,9 @@ class _HomePageState extends State<HomePage> {
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.more_vert,
-                                      size: 20, color: Color(0xFF64748B)),
                                 ],
                               ),
                             ),
-
-                            // Foto Utama Postingan
                             if ((data['image_url'] ?? "").isNotEmpty)
                               Padding(
                                 padding:
@@ -257,8 +262,6 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ),
                               ),
-
-                            // Konten Teks (Judul, Deskripsi, Status)
                             Padding(
                               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                               child: Column(
@@ -282,27 +285,21 @@ class _HomePageState extends State<HomePage> {
                                         height: 1.5),
                                   ),
                                   const SizedBox(height: 12),
-                                  // Status Pill
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 10, vertical: 6),
                                     decoration: BoxDecoration(
-                                      color: statusBg,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      statusRaw,
-                                      style: TextStyle(
-                                          color: statusTxt,
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 10),
-                                    ),
+                                        color: statusBg,
+                                        borderRadius: BorderRadius.circular(8)),
+                                    child: Text(statusRaw,
+                                        style: TextStyle(
+                                            color: statusTxt,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 10)),
                                   ),
                                 ],
                               ),
                             ),
-
-                            // Action Row (Like, Comment, View, Share)
                             Padding(
                               padding:
                                   const EdgeInsets.fromLTRB(20, 18, 20, 24),
@@ -310,7 +307,6 @@ class _HomePageState extends State<HomePage> {
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  // Tombol Like (Logic Firestore)
                                   GestureDetector(
                                     onTap: () async {
                                       if (uid == null) return;
@@ -325,21 +321,6 @@ class _HomePageState extends State<HomePage> {
                                         await docRef.update({
                                           'likes': FieldValue.arrayUnion([uid])
                                         });
-                                        // Trigger Notifikasi Like
-                                        String ownerId = data['user_id'] ?? '';
-                                        if (ownerId.isNotEmpty &&
-                                            ownerId != uid) {
-                                          await FirebaseFirestore.instance
-                                              .collection('user_notifications')
-                                              .add({
-                                            'user_id': ownerId,
-                                            'report_id': reportId,
-                                            'title': 'Like Baru',
-                                            'message':
-                                                '${user?.email ?? "Seseorang"} menyukai laporan Anda',
-                                            'created_at': Timestamp.now(),
-                                          });
-                                        }
                                       }
                                     },
                                     child: Row(
@@ -363,27 +344,18 @@ class _HomePageState extends State<HomePage> {
                                       ],
                                     ),
                                   ),
-                                  // Komentar
-                                  GestureDetector(
-                                    onTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) => DetailPage(
-                                                reportId: reportId))),
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.mode_comment_outlined,
-                                            size: 20, color: Color(0xFF64748B)),
-                                        const SizedBox(width: 8),
-                                        Text("${data['comment_count'] ?? 0}",
-                                            style: const TextStyle(
-                                                fontSize: 13,
-                                                color: Color(0xFF64748B),
-                                                fontWeight: FontWeight.w600)),
-                                      ],
-                                    ),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.mode_comment_outlined,
+                                          size: 20, color: Color(0xFF64748B)),
+                                      const SizedBox(width: 8),
+                                      Text("${data['comment_count'] ?? 0}",
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Color(0xFF64748B),
+                                              fontWeight: FontWeight.w600)),
+                                    ],
                                   ),
-                                  // View Count
                                   Row(
                                     children: [
                                       const Icon(Icons.remove_red_eye_outlined,
@@ -396,18 +368,15 @@ class _HomePageState extends State<HomePage> {
                                               fontWeight: FontWeight.w600)),
                                     ],
                                   ),
-                                  // Share
                                   GestureDetector(
-                                    onTap: () {
-                                      Share.share(
-                                          '📢 ${data['title']}\n\nStatus: ${data['status']}');
-                                    },
-                                    child: const Row(
+                                    onTap: () => Share.share(
+                                        '📢 ${data['title']}\n\nStatus: ${data['status']}'),
+                                    child: Row(
                                       children: [
-                                        Icon(Icons.share_outlined,
+                                        const Icon(Icons.share_outlined,
                                             size: 20, color: Color(0xFF64748B)),
                                         const SizedBox(width: 8),
-                                        Text("Bagikan",
+                                        const Text("Bagikan",
                                             style: TextStyle(
                                                 fontSize: 13,
                                                 color: Color(0xFF64748B),
@@ -429,10 +398,6 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
-
-      // ==========================================
-      // CUSTOM BOTTOM NAVIGATION (80PX FIXED HEIGHT)
-      // ==========================================
       bottomNavigationBar: Container(
         height: 80,
         decoration: BoxDecoration(
@@ -449,7 +414,6 @@ class _HomePageState extends State<HomePage> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            // Menu Beranda (Active)
             GestureDetector(
               onTap: () {},
               child: Column(
@@ -465,8 +429,6 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-
-            // Central Add Button
             GestureDetector(
               onTap: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const AddReportPage())),
@@ -474,19 +436,13 @@ class _HomePageState extends State<HomePage> {
                 width: 56,
                 height: 56,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF2563EB),
-                  shape: BoxShape.circle,
-                ),
+                    color: Color(0xFF2563EB), shape: BoxShape.circle),
                 child: const Icon(Icons.add, color: Colors.white, size: 32),
               ),
             ),
-
-            // Menu Profil (Inactive)
             GestureDetector(
-              onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const UserProfilePage()));
-              },
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const UserProfilePage())),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: const [

@@ -4,12 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-
-// Import semua halaman tujuan
 import 'admin_laporan_page.dart';
 import 'admin_detail_page.dart';
 import 'analisis_ai_page.dart';
-import 'statistik_page.dart';
 import 'admin_profile_page.dart';
 
 class AdminPage extends StatefulWidget {
@@ -108,15 +105,15 @@ class _AdminPageState extends State<AdminPage> {
                           builder: (_) => const AnalisisAiPage()));
                 },
               ),
-              _drawerItem(
-                icon: Icons.bar_chart_rounded,
-                label: "Grafik",
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const StatistikPage()));
-                },
-              ),
+              // _drawerItem(
+              //   icon: Icons.bar_chart_rounded,
+              //   label: "Grafik",
+              //   onTap: () {
+              //     Navigator.pop(context);
+              //     Navigator.push(context,
+              //         MaterialPageRoute(builder: (_) => const StatistikPage()));
+              //   },
+              // ),
               _drawerItem(
                 icon: Icons.person_rounded,
                 label: "Pengguna",
@@ -128,29 +125,9 @@ class _AdminPageState extends State<AdminPage> {
                           builder: (_) => const AdminProfilePage()));
                 },
               ),
-              _drawerItem(
-                icon: Icons.settings_rounded,
-                label: "Pengaturan",
-                onTap: () {
-                  Navigator.pop(context);
-                  // Tambahkan navigasi ke pengaturan jika ada
-                },
-              ),
 
               const Spacer(), // Dorong menu keluar ke paling bawah
 
-              // 3. Bottom Section (Logout)
-              const Divider(
-                  color: Colors.white10,
-                  thickness: 1,
-                  indent: 20,
-                  endIndent: 20),
-              _drawerItem(
-                icon: Icons.logout_rounded,
-                label: "Keluar",
-                isDestructive: true,
-                onTap: logout,
-              ),
               const SizedBox(height: 20),
             ],
           ),

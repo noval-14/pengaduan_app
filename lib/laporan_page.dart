@@ -133,7 +133,7 @@ class _LaporanPageState extends State<LaporanPage> {
 
               final List likes = data['likes'] ?? [];
 
-              final bool isLiked = likes.contains(uid);
+              likes.contains(uid);
               String reportTitle =
                   (data['title'] ?? '').toString().toLowerCase();
 

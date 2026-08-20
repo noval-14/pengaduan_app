@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      // home: LoginPage(), // <--- 2. KODE LAMA (DIHAPUS/KOMENTAR)
+      // home: LoginPage(),
       home:
           const SplashPage(), // <--- 3. UBAH JADI SPLASH PAGE AGAR MUNCUL PERTAMA KALI
       routes: {

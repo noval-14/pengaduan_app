@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'laporan_page.dart';
-import 'statistik_page.dart';
 import 'user_profile_page.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -447,18 +446,18 @@ class _ProfilePageState extends State<ProfilePage> {
                   size: 22,
                 ),
               ),
-              navItem(
-                icon: Icons.bar_chart_rounded,
-                label: "Statistik",
-                onTap: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const StatistikPage(),
-                    ),
-                  );
-                },
-              ),
+              // navItem(
+              //   icon: Icons.bar_chart_rounded,
+              //   label: "Statistik",
+              //   onTap: () {
+              //     Navigator.pushReplacement(
+              //       context,
+              //       MaterialPageRoute(
+              //         builder: (_) => const StatistikPage(),
+              //       ),
+              //     );
+              //   },
+              // ),
               navItem(
                 icon: Icons.person,
                 label: "Akun",

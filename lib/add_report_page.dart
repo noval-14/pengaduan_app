@@ -118,7 +118,8 @@ class _AddReportPageState extends State<AddReportPage>
         'handled_by': '',
         'system_status': 'Perlu Dicek',
         'views': 0,
-        'likes': 0,
+        'likes': [],
+        'comment_count': 0,
         'created_at': Timestamp.now(),
       });
 
@@ -443,7 +444,7 @@ class _AddReportPageState extends State<AddReportPage>
           icon: Icons.description_rounded,
           color: color,
           maxLines: 4,
-          maxLength: 300,
+          maxLength: 1000,
         ),
       ],
     );
